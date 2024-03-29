@@ -8,14 +8,25 @@ import (
 	"net/url"
 	urlparser "parser/urlParser"
 	"strings"
+
+	"github.com/rs/cors"
 )
 
 func main() {
 
-	http.HandleFunc("/parse", parseHandler)
+	// add cors allowed all
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost},
+		AllowedHeaders: []string{"*"},
+	})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/parse", parseHandler)
+
+	handler := c.Handler(mux)
 
 	fmt.Println("Server started on port 8080...")
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8080", handler)
 }
 
 func parseHandler(w http.ResponseWriter, r *http.Request) {
@@ -36,8 +47,8 @@ func parseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsedURL, err := url.Parse(link)
-	if err != nil {
+	parsedURL, err := url.ParseRequestURI(link)
+	if err != nil || !parsedURL.IsAbs() {
 		http.Error(w, "Invalid URL provided", http.StatusBadRequest)
 		return
 	}
@@ -64,9 +75,11 @@ func parseHandler(w http.ResponseWriter, r *http.Request) {
 	for _, url := range urls {
 		cleanedURL := make(map[string]interface{})
 		if url.Href != "" {
-			if !strings.HasPrefix(url.Href, "http") { // Check if Href is relative
+			if !strings.HasPrefix(url.Href, "http") {
+				// Check if Href is relative
 				domain := parsedURL.Scheme + "://" + parsedURL.Host
-				if strings.HasPrefix(url.Href, "/") { // Check if Href starts with a slash
+				if strings.HasPrefix(url.Href, "/") {
+					// Check if Href starts with a slash
 					url.Href = domain + url.Href
 				} else {
 					url.Href = domain + "/" + url.Href
